@@ -3,7 +3,7 @@ package ai.shadowvision.cleanup
 import android.app.Application
 import android.content.ContentValues
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
@@ -116,29 +116,20 @@ class PhotoEditorViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun decodeImage(uri: Uri): Bitmap {
         val resolver = getApplication<Application>().contentResolver
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input, null, bounds)
-        } ?: error("Cannot open selected image")
+        val source = ImageDecoder.createSource(resolver, uri)
+        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
+            decoder.setTargetConfig(Bitmap.Config.ARGB_8888)
 
-        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Invalid image" }
-        var sampleSize = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / sampleSize > MAX_IMAGE_EDGE) {
-            sampleSize *= 2
-        }
-
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-        val decoded = resolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input, null, options)
-        } ?: error("Cannot decode selected image")
-
-        return if (decoded.config == Bitmap.Config.ARGB_8888) {
-            decoded
-        } else {
-            decoded.copy(Bitmap.Config.ARGB_8888, false) ?: decoded
+            val size = info.size
+            val longestEdge = maxOf(size.width, size.height)
+            if (longestEdge > MAX_IMAGE_EDGE) {
+                val scale = MAX_IMAGE_EDGE.toFloat() / longestEdge
+                decoder.setTargetSize(
+                    (size.width * scale).toInt().coerceAtLeast(1),
+                    (size.height * scale).toInt().coerceAtLeast(1)
+                )
+            }
         }
     }
 
