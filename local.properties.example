@@ -1,0 +1,3 @@
+# Copy this file to local.properties and replace the path with your Android SDK location.
+# Android Studio normally creates local.properties for you during the first Gradle sync.
+sdk.dir=/absolute/path/to/Android/Sdk
